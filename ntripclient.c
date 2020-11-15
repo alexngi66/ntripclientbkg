@@ -131,7 +131,7 @@ int sigstop = 0;
 static __attribute__ ((noreturn)) void sighandler_alarm(
 int sig __attribute__((__unused__)))
 #else /* __GNUC__ */
-static void sighandler_alarm(int sig)
+static void sighandler_alarm(int sig) // Alarm handler
 #endif /* __GNUC__ */
 {
   if(!sigstop)
@@ -176,6 +176,7 @@ static const char *encodeurl(const char *req)
   *urlenc = 0;
   return buf;
 }
+// Parse command line with one option ntrip:mountpoint[/user[:password]][@[server][:port][@proxyhost[:proxyport]]][;nmea]
 
 static const char *geturl(const char *url, struct Args *args)
 {
@@ -188,8 +189,8 @@ static const char *geturl(const char *url, struct Args *args)
     return "URL must start with 'ntrip:'.";
   url += 6; /* skip ntrip: */
 
-  if(*url != '@' && *url != '/')
-  {
+  if(*url != '@' && *url != '/')  // not user info or server, it is the mountpoint
+  { // while not (eol or server/proxy or nmea or user or too long) copy it
     /* scan for mountpoint */
     args->data = Buffer;
     if(*url != '?')
@@ -198,7 +199,7 @@ static const char *geturl(const char *url, struct Args *args)
          *(Buffer++) = *(url++);
     }
     else
-    {
+    { // if question mark, alphanumeric plus minus underscore period and escape with percent to hex
        while(*url && *url != '@' &&  *url != '/' && Buffer != Bufend)
        {
           if(isalnum(*url) || *url == '-' || *url == '_' || *url == '.')
@@ -212,7 +213,7 @@ static const char *geturl(const char *url, struct Args *args)
           }
        }
     }
-    if(Buffer == args->data)
+    if(Buffer == args->data) // buffer pointer did not move means no data added
       return "Mountpoint required.";
     else if(Buffer >= Bufend-1)
       return "Parsing buffer too short.";
@@ -306,7 +307,7 @@ static const char *geturl(const char *url, struct Args *args)
 
   return *url ? "Garbage at end of server string." : 0;
 }
-
+// parse the commands line and fill in the data structure
 static int getargs(int argc, char **argv, struct Args *args)
 {
   int res = 1;
@@ -335,7 +336,7 @@ static int getargs(int argc, char **argv, struct Args *args)
   args->serlogfile = 0;
   help = 0;
 
-  do
+  do // process each option
   {
 #ifdef NO_LONG_OPTS
     switch((getoptr = getopt(argc, argv, ARGOPT)))
@@ -564,7 +565,7 @@ static int encode(char *buf, int size, const char *user, const char *pwd)
     *out = 0;
   return bytes;
 }
-
+/**************************************************************************************/
 int main(int argc, char **argv)
 {
   struct Args args;
@@ -573,9 +574,9 @@ int main(int argc, char **argv)
   setbuf(stdin, 0);
   setbuf(stderr, 0);
 #ifndef WINDOWSVERSION
-  signal(SIGALRM,sighandler_alarm);
-  signal(SIGINT,sighandler_int);
-  alarm(ALARMTIME);
+  signal(SIGALRM,sighandler_alarm); // nothing happens for 2 minutes, it triggers a signal
+  signal(SIGINT,sighandler_int); // user breaks, it is handled.
+  alarm(ALARMTIME);  // alarm for 2 minutes
 #else
   WSADATA wsaData;
   if(WSAStartup(MAKEWORD(1,1),&wsaData))
@@ -671,9 +672,9 @@ int main(int argc, char **argv)
       if(!stop && !error)
       {
         memset(&their_addr, 0, sizeof(struct sockaddr_in));
-        if((i = strtol(port, &b, 10)) && (!b || !*b))
+        if((i = strtol(port, &b, 10)) && (!b || !*b)) // convert port as a string to port if it is base 10 as host in right representation
           their_addr.sin_port = htons(i);
-        else if(!(se = getservbyname(port, 0)))
+        else if(!(se = getservbyname(port, 0))) // specify by service name like ftp on any protocol like TCP
         {
           fprintf(stderr, "Can't resolve port %s.", port);
           stop = 1;
@@ -684,7 +685,7 @@ int main(int argc, char **argv)
         }
         if(!stop && !error)
         {
-          if(!(he=gethostbyname(server)))
+          if(!(he=gethostbyname(server))) // use DNS to convert host name to ip address
           {
             fprintf(stderr, "Server name lookup failed for '%s'.\n", server);
             error = 1;
@@ -1200,7 +1201,7 @@ int main(int argc, char **argv)
                 memset(&casterRTP, 0, sizeof(casterRTP));
                 casterRTP.sin_family = AF_INET;
                 casterRTP.sin_port   = htons(serverport);
-                casterRTP.sin_addr   = *((struct in_addr *)he->h_addr);
+                casterRTP.sin_addr   = *((struct in_addr *)he->h_addr_list[0]);
 
                 if((i = sendto(sockudp, rtpbuffer, 12, 0,
                 (struct sockaddr *) &casterRTP, sizeof(casterRTP))) != 12)
@@ -1412,7 +1413,7 @@ int main(int argc, char **argv)
               AGENTSTRING, revisionstr);
             }
             else
-            {
+            { // for HTTP main path
               const char *nmeahead = (args.nmea && args.mode == HTTP) ? args.nmea : 0;
 
               i=snprintf(buf, MAXDATASIZE-40, /* leave some space for login */
@@ -1480,10 +1481,10 @@ int main(int argc, char **argv)
               int chunksize = 0;
 
               while(!stop && !error &&
-              (numbytes=recv(sockfd, buf, MAXDATASIZE-1, 0)) > 0)
+              (numbytes=recv(sockfd, buf, MAXDATASIZE-1, 0)) > 0)   // as long as there is buffer to receive
               {
 #ifndef WINDOWSVERSION
-                alarm(ALARMTIME);
+                alarm(ALARMTIME); // two minute alarm
 #endif
                 if(!k)
                 {
